@@ -32,8 +32,8 @@ JAR_FILES = r"C:\Users\Quino\Downloads\db2jdbcdriver\jcc-12.1.0.0.jar;C:\Users\Q
 # Sample data
 COUNTRIES = ['UY', 'AR', 'BR']
 NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eva', 'Frank', 'Grace', 'Henry']
-USER_AMOUNT = 100
-TEST_AMOUNT = 1
+USER_AMOUNT = 10000
+TEST_AMOUNT = 1000
 
 # Generate users
 users = []
@@ -86,7 +86,7 @@ def insert_users(cursor, users):
 
 def create_bar_graph(timeRange, timeList, timeUsers):
     # Data
-    table_names = ['users_range', 'users_list', 'users']
+    table_names = ['Sin particiones', 'Particiones por lista de país', 'Particiones por rango de edad']
     average_times = [timeRange, timeList, timeUsers]
 
     # Plot
@@ -98,50 +98,71 @@ def create_bar_graph(timeRange, timeList, timeUsers):
         yval = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.2f}', ha='center', va='bottom')
 
-    plt.title(f'Average Insert Time per Table ({TEST_AMOUNT} iterations)')
-    plt.ylabel('Time (seconds)')
-    plt.xlabel('Table Name')
+    plt.title(f'Tiempo promedio de inserción por tabla ({TEST_AMOUNT} iteraciones)')
+    plt.ylabel('Tiempo (segundos)')
+    plt.xlabel('')
     plt.ylim(0, max(average_times) * 1.2)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
 
     plt.tight_layout()
     plt.show()
 
-def benchmark_queries(cursor, users):
+def benchmark_and_insert(cursor, users):
     tables = ['users', 'users_list', 'users_range']
     queries = {
-        'Country = UY': "SELECT * FROM {table} WHERE country_code = 'UY'",
-        'Age 27-49': "SELECT * FROM {table} WHERE age BETWEEN 27 AND 49",
-        'Full Table': "SELECT * FROM {table}"
+        'País = UY': "SELECT * FROM {table} WHERE country_code = 'UY'",
+        'Edades entre 27-49': "SELECT * FROM {table} WHERE age BETWEEN 27 AND 49",
+        'Sin restricciones': "SELECT * FROM {table} WHERE name = 'Alice' OR name = 'Bob'" 
     }
 
+    # For insert timing
+    total_time = {table: 0 for table in tables}
+    # For query timing
     results = {query_name: {table: 0 for table in tables} for query_name in queries}
 
-    for _ in range(TEST_AMOUNT):
+    for i in range(TEST_AMOUNT):
+        print(f"Iteration {i + 1}/{TEST_AMOUNT}")
         delete_users_in_tables(cursor)
-        insert_users_range(cursor, users)
-        insert_users_list(cursor, users)
-        insert_users(cursor, users)
+
+        # Insert and time
+        start = time.perf_counter()
+        timeRange = insert_users_range(cursor, users)
+        timeList = insert_users_list(cursor, users)
+        timeUsers = insert_users(cursor, users)
+        total_time['users_range'] += timeRange
+        total_time['users_list'] += timeList
+        total_time['users'] += timeUsers
+
+        # Query and time
         for query_name, query in queries.items():
             for table in tables:
-                start = time.perf_counter()
+                q_start = time.perf_counter()
                 cursor.execute(query.format(table=table))
                 cursor.fetchall()
-                end = time.perf_counter()
-                results[query_name][table] += (end - start)
+                q_end = time.perf_counter()
+                results[query_name][table] += (q_end - q_start)
 
     # Compute averages
+    avg_time = {table: total_time[table] / TEST_AMOUNT for table in tables}
     for query_name in results:
         for table in results[query_name]:
             results[query_name][table] /= TEST_AMOUNT
 
-    return results
+    return avg_time, results
 
 def plot_query_results(results):
     import numpy as np
 
+    # Map internal table names to user-friendly names
+    table_name_map = {
+        'users': 'Sin particiones',
+        'users_list': 'Particiones por lista de país',
+        'users_range': 'Particiones por rango de edad'
+    }
+
     queries = list(results.keys())
     tables = list(results[queries[0]].keys())
+    friendly_tables = [table_name_map[table] for table in tables]
 
     # Create data matrix: rows are queries, columns are tables
     data = [[results[query][table] for table in tables] for query in queries]
@@ -154,44 +175,21 @@ def plot_query_results(results):
     for i, query in enumerate(queries):
         plt.bar(x + i * width, data[i], width, label=query)
 
-    plt.xlabel('Table')
-    plt.ylabel('Average Query Time (s)')
-    plt.title(f'Average Query Time by Table and Condition ({TEST_AMOUNT} Iterations)')
-    plt.xticks(x + width, tables)
+    plt.xlabel('')
+    plt.ylabel('Tiempo promedio por consulta (s)')
+    plt.title(f'Tiempo promedio de consulta por tabla y condición ({TEST_AMOUNT} iteraciones)')
+    plt.xticks(x + width, friendly_tables)
     plt.legend()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
     plt.show()
 
-
 # Main execution
-total_time_users = 0
-total_time_users_list = 0
-total_time_users_range = 0
-for i in range(TEST_AMOUNT):
-    print(f"Iteration {i + 1}/{TEST_AMOUNT}")
-    delete_users_in_tables(cursor)
-    timeRange = insert_users_range(cursor, users)
-    timeList = insert_users_list(cursor, users)
-    timeUsers = insert_users(cursor, users)
-
-    total_time_users_range += timeRange
-    total_time_users_list += timeList
-    total_time_users += timeUsers
-
-# Calculate average times
-timeRange = total_time_users_range / TEST_AMOUNT
-timeList = total_time_users_list / TEST_AMOUNT
-timeUsers = total_time_users / TEST_AMOUNT
-
-print(f"Time taken for users_range: {timeRange:.2f} seconds")
-print(f"Time taken for users_list: {timeList:.2f} seconds")
-print(f"Time taken for users: {timeUsers:.2f} seconds")
-
-create_bar_graph(timeRange, timeList, timeUsers)
-
-# Benchmark queries
-results = benchmark_queries(cursor, users)
+avg_time, results = benchmark_and_insert(cursor, users)
+print(f"Time taken for users_range: {avg_time['users_range']:.2f} seconds")
+print(f"Time taken for users_list: {avg_time['users_list']:.2f} seconds")
+print(f"Time taken for users: {avg_time['users']:.2f} seconds")
+create_bar_graph(avg_time['users_range'], avg_time['users_list'], avg_time['users'])
 plot_query_results(results)
 
 delete_users_in_tables(cursor)
