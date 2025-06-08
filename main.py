@@ -29,7 +29,7 @@ JDBC_DRIVER_CLASS = "com.ibm.db2.jcc.DB2Driver"
 COUNTRIES = ['UY', 'AR', 'BR']
 NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eva', 'Frank', 'Grace', 'Henry']
 USER_AMOUNT = 50000  # Total number of users to generate
-TEST_AMOUNT = 15 # Number of iterations for the benchmark
+TEST_AMOUNT = 10 # Number of iterations for the benchmark
 
 # Function to generate users
 def generate_users(n):
@@ -107,6 +107,8 @@ def benchmark_and_insert(cursor):
         users = generate_users(USER_AMOUNT)
         delete_users_in_tables(cursor)
 
+        conn.commit()
+
         # Insert and time
         timeRange = insert_users_range(cursor, users)
         timeList = insert_users_list(cursor, users)
@@ -115,6 +117,8 @@ def benchmark_and_insert(cursor):
         total_time['users_range'] += timeRange
         total_time['users_list'] += timeList
         total_time['users'] += timeUsers
+
+        conn.commit()
 
         # Query and time
         for query_name, query in queries.items():
@@ -129,6 +133,8 @@ def benchmark_and_insert(cursor):
     for query_name in results:
         for table in results[query_name]:
             results[query_name][table] /= TEST_AMOUNT
+
+    conn.commit()
 
     return avg_time, results
 
