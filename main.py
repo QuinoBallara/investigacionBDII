@@ -171,6 +171,13 @@ print(f"users:       {avg_time['users']:.2f} s")
 create_bar_graph(avg_time['users_range'], avg_time['users_list'], avg_time['users'])
 plot_query_results(results)
 
+# Print average query times as a table
+print("\n--- Promedios de Consulta (segundos) ---")
+for query_name, table_times in results.items():
+    print(f"\n{query_name}:")
+    for table, avg_query_time in table_times.items():
+        print(f"  {table}: {avg_query_time:.4f} s")
+
 delete_users_in_tables(cursor)
 
 conn.commit()
