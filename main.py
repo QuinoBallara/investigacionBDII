@@ -32,8 +32,8 @@ JAR_FILES = r"C:\Users\Quino\Downloads\db2jdbcdriver\jcc-12.1.0.0.jar;C:\Users\Q
 # Sample data
 COUNTRIES = ['UY', 'AR', 'BR']
 NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eva', 'Frank', 'Grace', 'Henry']
-USER_AMOUNT = 10000
-TEST_AMOUNT = 1000
+USER_AMOUNT = 100
+TEST_AMOUNT = 1
 
 # Generate users
 users = []
@@ -98,7 +98,7 @@ def create_bar_graph(timeRange, timeList, timeUsers):
         yval = bar.get_height()
         plt.text(bar.get_x() + bar.get_width()/2.0, yval + 0.01, f'{yval:.2f}', ha='center', va='bottom')
 
-    plt.title(f'Tiempo promedio de inserción por tabla ({TEST_AMOUNT} iteraciones)')
+    plt.title(f'Tiempo promedio de inserción de {USER_AMOUNT} elementos por tabla ({TEST_AMOUNT} iteraciones)')
     plt.ylabel('Tiempo (segundos)')
     plt.xlabel('')
     plt.ylim(0, max(average_times) * 1.2)
@@ -177,7 +177,7 @@ def plot_query_results(results):
 
     plt.xlabel('')
     plt.ylabel('Tiempo promedio por consulta (s)')
-    plt.title(f'Tiempo promedio de consulta por tabla y condición ({TEST_AMOUNT} iteraciones)')
+    plt.title(f'Tiempo promedio de consulta por tabla y condición ({TEST_AMOUNT} iteraciones y {USER_AMOUNT} elementos)')
     plt.xticks(x + width, friendly_tables)
     plt.legend()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
