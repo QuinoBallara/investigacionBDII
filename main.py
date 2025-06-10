@@ -28,11 +28,12 @@ JDBC_DRIVER_CLASS = "com.ibm.db2.jcc.DB2Driver"
 # Sample data
 COUNTRIES = ['UY', 'AR', 'BR']
 NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eva', 'Frank', 'Grace', 'Henry']
-USER_AMOUNT = 50000  # Total number of users to generate
-TEST_AMOUNT = 10 # Number of iterations for the benchmark
+USER_AMOUNT = 10000000  # Total number of users to generate
+TEST_AMOUNT = 20 # Number of iterations for the benchmark
 
 # Function to generate users
 def generate_users(n):
+    print(f"Generating {n} users...")
     users = []
     for i in range(1, n + 1):
         name = random.choice(NAMES)
@@ -54,21 +55,24 @@ def delete_users_in_tables(cursor):
 def insert_users_range(cursor, users):
     print("Inserting into users_range...")
     start = time.perf_counter()
-    cursor.executemany("INSERT INTO users_range (id, name, age, country_code) VALUES (?, ?, ?, ?)", users)
+    for user in users:
+        cursor.execute("INSERT INTO users_range (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
     end = time.perf_counter()
     return end - start
 
 def insert_users_list(cursor, users):
     print("Inserting into users_list...")
     start = time.perf_counter()
-    cursor.executemany("INSERT INTO users_list (id, name, age, country_code) VALUES (?, ?, ?, ?)", users)
+    for user in users:
+        cursor.execute("INSERT INTO users_list (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
     end = time.perf_counter()
     return end - start
 
 def insert_users(cursor, users):
     print("Inserting into users...")
     start = time.perf_counter()
-    cursor.executemany("INSERT INTO users (id, name, age, country_code) VALUES (?, ?, ?, ?)", users)
+    for user in users:
+        cursor.execute("INSERT INTO users (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
     end = time.perf_counter()
     return end - start
 
@@ -89,7 +93,8 @@ def create_bar_graph(timeRange, timeList, timeUsers):
     plt.ylim(0, max(average_times) * 1.2)
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    plt.savefig("insercion_pro.png")
+    plt.close()
 
 def benchmark_and_insert(cursor):
     tables = ['users', 'users_list', 'users_range']
@@ -165,7 +170,8 @@ def plot_query_results(results):
     plt.legend()
     plt.grid(axis='y', linestyle='--', alpha=0.7)
     plt.tight_layout()
-    plt.show()
+    plt.savefig("consultas_pro.png")
+    plt.close()
 
 # Main execution
 avg_time, results = benchmark_and_insert(cursor)
