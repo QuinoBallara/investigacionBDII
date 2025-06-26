@@ -28,10 +28,12 @@ JDBC_DRIVER_CLASS = "com.ibm.db2.jcc.DB2Driver"
 # Sample data
 COUNTRIES = ['UY', 'AR', 'BR']
 NAMES = ['Alice', 'Bob', 'Charlie', 'Diana', 'Eva', 'Frank', 'Grace', 'Henry']
-USER_AMOUNT = 10000000  # Total number of users to generate
-TEST_AMOUNT = 20 # Number of iterations for the benchmark
 
-# Function to generate users
+USER_AMOUNT = 1000000  # Total number of users to generate
+TEST_AMOUNT = 5 # Number of iterations for the benchmark
+BATCH_SIZE = 10000  # Size of each batch for insertion
+
+# Function to generate users randomly
 def generate_users(n):
     print(f"Generating {n} users...")
     users = []
@@ -42,6 +44,54 @@ def generate_users(n):
         users.append((i, name, age, country))
     return users
 
+# Function to generate users evenly distributed across age ranges and countries
+def generate_users_evenly(n):
+    print(f"Generating {n} users...")
+    users = []
+    
+    # Age groups: 0-25, 26-50, 51-150
+    age_groups = [
+        (5, 25),    # Young (using 5 as minimum instead of 0)
+        (26, 50),   # Middle
+        (51, 99)    # Senior (using 99 as maximum instead of 150)
+    ]
+    
+    countries = COUNTRIES  # ['UY', 'AR', 'BR']
+    
+    # Calculate users per country and per age group
+    users_per_country = n // len(countries)
+    users_per_age_group = users_per_country // len(age_groups)
+    
+    user_id = 1
+    
+    for country in countries:
+        for age_min, age_max in age_groups:
+            # Generate users for this country and age group
+            for i in range(users_per_age_group):
+                if user_id > n:  # Don't exceed the requested number
+                    break
+                    
+                name = NAMES[(user_id - 1) % len(NAMES)]  # Cycle through names
+                # Distribute ages evenly within the range
+                age_range = age_max - age_min + 1
+                age = age_min + (i % age_range)
+                
+                users.append((user_id, name, age, country))
+                user_id += 1
+    
+    # Handle any remaining users due to rounding
+    remaining = n - (user_id - 1)
+    for i in range(remaining):
+        if user_id > n:
+            break
+        name = NAMES[(user_id - 1) % len(NAMES)]
+        age = 5 + (i % 95)  # Distribute remaining ages
+        country = countries[i % len(countries)]
+        users.append((user_id, name, age, country))
+        user_id += 1
+    
+    return users
+
 # Connect to DB2
 conn = jaydebeapi.connect(JDBC_DRIVER_CLASS, JDBC_URL, [USERNAME, PASSWORD])
 cursor = conn.cursor()
@@ -49,30 +99,48 @@ cursor = conn.cursor()
 def delete_users_in_tables(cursor):
     print("Deleting existing tables...")
     cursor.execute("DELETE FROM users_range")
+    conn.commit()  
     cursor.execute("DELETE FROM users_list")
+    conn.commit()
     cursor.execute("DELETE FROM users")
+    conn.commit()
 
 def insert_users_range(cursor, users):
     print("Inserting into users_range...")
     start = time.perf_counter()
-    for user in users:
-        cursor.execute("INSERT INTO users_range (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
+
+    for i in range(0, len(users), BATCH_SIZE):
+        batch = users[i:i + BATCH_SIZE]
+        cursor.executemany("INSERT INTO users_range (id, name, age, country_code) VALUES (?, ?, ?, ?)", batch)
+        conn.commit()
+        print(f"Committed batch {i//BATCH_SIZE + 1}: rows {i+1} to {min(i+BATCH_SIZE, len(users))}")
+    
     end = time.perf_counter()
     return end - start
 
 def insert_users_list(cursor, users):
     print("Inserting into users_list...")
     start = time.perf_counter()
-    for user in users:
-        cursor.execute("INSERT INTO users_list (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
+    
+    for i in range(0, len(users), BATCH_SIZE):
+        batch = users[i:i + BATCH_SIZE]
+        cursor.executemany("INSERT INTO users_list (id, name, age, country_code) VALUES (?, ?, ?, ?)", batch)
+        conn.commit()
+        print(f"Committed batch {i//BATCH_SIZE + 1}: rows {i+1} to {min(i+BATCH_SIZE, len(users))}")
+    
     end = time.perf_counter()
     return end - start
 
 def insert_users(cursor, users):
     print("Inserting into users...")
     start = time.perf_counter()
-    for user in users:
-        cursor.execute("INSERT INTO users (id, name, age, country_code) VALUES (?, ?, ?, ?)", user)
+    
+    for i in range(0, len(users), BATCH_SIZE):
+        batch = users[i:i + BATCH_SIZE]
+        cursor.executemany("INSERT INTO users (id, name, age, country_code) VALUES (?, ?, ?, ?)", batch)
+        conn.commit()
+        print(f"Committed batch {i//BATCH_SIZE + 1}: rows {i+1} to {min(i+BATCH_SIZE, len(users))}")
+    
     end = time.perf_counter()
     return end - start
 
@@ -97,6 +165,7 @@ def create_bar_graph(timeRange, timeList, timeUsers):
     plt.close()
 
 def benchmark_and_insert(cursor):
+    conn.commit()
     tables = ['users', 'users_list', 'users_range']
     queries = {
         'País = UY': "SELECT * FROM {table} WHERE country_code = 'UY'",
@@ -109,10 +178,9 @@ def benchmark_and_insert(cursor):
 
     for i in range(TEST_AMOUNT):
         print(f"\n--- Iteration {i + 1}/{TEST_AMOUNT} ---")
-        users = generate_users(USER_AMOUNT)
-        delete_users_in_tables(cursor)
+        users = generate_users_evenly(USER_AMOUNT)
 
-        conn.commit()
+        conn.commit()  # Commit deletion before insertion
 
         # Insert and time
         timeRange = insert_users_range(cursor, users)
@@ -123,8 +191,6 @@ def benchmark_and_insert(cursor):
         total_time['users_list'] += timeList
         total_time['users'] += timeUsers
 
-        conn.commit()
-
         # Query and time
         for query_name, query in queries.items():
             for table in tables:
@@ -133,13 +199,13 @@ def benchmark_and_insert(cursor):
                 cursor.fetchall()
                 q_end = time.perf_counter()
                 results[query_name][table] += (q_end - q_start)
+        
+        conn.commit()  # Commit after queries
 
     avg_time = {table: total_time[table] / TEST_AMOUNT for table in tables}
     for query_name in results:
         for table in results[query_name]:
             results[query_name][table] /= TEST_AMOUNT
-
-    conn.commit()
 
     return avg_time, results
 
@@ -191,8 +257,6 @@ for query_name, table_times in results.items():
         print(f"  {table}: {avg_query_time:.4f} s")
 
 delete_users_in_tables(cursor)
-
-conn.commit()
 cursor.close()
 conn.close()
 
